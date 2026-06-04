@@ -2,12 +2,12 @@
 
 # CSK CLI
 
-**Company Skill Kit — Install, manage, and trace deliverables for Inception-Driven Standard Agile**
+**Company Skill Kit — scaffold, version, validate, and trace artifacts on a 5-gate spine**
 
 [![License: EIgentLab Source v1.0](https://img.shields.io/badge/License-EIgentLab%20Source%20v1.0-blue.svg)](https://github.com/EIgentLab/csk-cli/blob/main/LICENSE)
 [![Go 1.26.3+](https://img.shields.io/badge/Go-1.26.3+-00ADD8.svg)](https://go.dev/)
 
-[Install](#install) · [Quick Start](#quick-start) · [Commands](#commands) · [Workflow Guide](#workflow-guide) · [Document Lineage](#document-lineage) · [Skills & Agents](#skills--agents) · [Deliverables Index](#deliverables-index) · [Development](#development)
+[Install](#install) · [Quick Start](#quick-start) · [Commands](#commands) · [Workflow Guide](#workflow-guide) · [Document Lineage](#document-lineage) · [Skills & Agents](#skills--agents) · [Artifact Index](#artifact-index) · [Development](#development)
 
 </div>
 
@@ -15,13 +15,16 @@
 
 ## What is CSK CLI?
 
-`csk` is the command-line companion to the **Company Skill Kit (CSK)** — a suite of 36 skills + 10 role-based agents that power the **Inception-Driven Standard Agile** workflow for small teams (8-10 people).
+`csk` is the command-line companion to the **Company Skill Kit (CSK)** — **14 skills + 10 role-based agents** built on **one universal 5-gate spine** (`G1 ALIGN → G2 DEFINE → G3 BUILD&VERIFY → G4 SHIP`; `G5 OPERATE` deferred). It works identically for a solo project and a 10-person team.
+
+The CLI **owns all structure & lifecycle**; the 14 skills own **content** only.
 
 | Capability | What it means |
 |---|---|
-| **Install & manage** | Ships embedded skills/agents — `csk install` drops them into `.claude/` so Claude Code can use them instantly |
-| **Deliverables index** | Scans `.project/deliverables/`, builds a CSV index of every artifact (PRD, SRS, ADR, …) with frontmatter, cross-refs, and traceability |
-| **Visualization & search** | Ripgrep-powered search, Mermaid diagram generation (graph / RTM / trace), orphan detection, ref validation — all from the CLI |
+| **Own the lifecycle** | `csk new` scaffolds a doc-as-folder with canonical frontmatter; `csk status` runs the state machine; `csk revise` versions + backs up; `csk validate` gates. Skills never hand-edit lifecycle fields. |
+| **Install & manage** | Ships embedded skills/agents — `csk install` drops them into `.claude/`; `csk rule sync` injects the `<csk-rule>` operating contract into `./CLAUDE.md` |
+| **Index & trace** | Scans gate dirs (`g1-align … g4-ship`), indexes every artifact, computes traceability from `derives_from` (`csk trace` / `csk rtm`) |
+| **Visualization & search** | Ripgrep-powered search, Mermaid generation (graph / RTM / trace), orphan + broken-ref detection — all from the CLI |
 
 ---
 
@@ -77,17 +80,35 @@ csk version
 ## Quick Start
 
 ```bash
-csk install              # Install skills + agents into ./.claude/
-csk install -g           # … or globally into ~/.claude/
-csk list                 # Show what was installed
-csk db rebuild           # Build deliverables index (required before search/viz)
-csk skills list          # Explore available skills
-csk skills search "prd"  # Fuzzy search
+csk install                                   # Install skills + agents into ./.claude/ (-g for ~/.claude)
+csk rule sync                                 # Inject the <csk-rule> operating contract into ./CLAUDE.md
+csk skills list                               # Explore the 14 skills
+
+# Author an artifact (CLI owns structure; the skill fills the content):
+csk new --type brief --slug checkout --title "Checkout Brief"   # → g1-align/brief-checkout/
+# …fill the FILL[...] regions…
+csk validate g1-align/brief-checkout          # structural gate
+csk status g1-align/brief-checkout approved   # validate runs inline; CLI stamps + change_log
+
+csk db rebuild && csk db verify               # build + CI gate
+csk trace BRIEF-checkout                       # lineage; or `csk rtm --view coverage`
 ```
 
 ---
 
 ## Commands
+
+### Lifecycle (CLI owns structure & lifecycle)
+
+| Command | Description | Key flags |
+|---|---|---|
+| `csk new` | Scaffold a doc-as-folder `g<N>-<gate>/<type>-<slug>/`: main file (canonical frontmatter, `version 1.0.0`, `status draft`) + one stub per part. Atomic types (`bug`) → single flat file. | `--type`, `--slug`, `--title`, `--source-skill`, `--source-skill-version` |
+| `csk status <file\|doc-dir>… <state>` | Move lifecycle state (legal state machine). `→ approved` runs `csk validate` inline. | `--reason` |
+| `csk revise <file\|doc-dir>` | Backup + semver bump + `change_log`. `breaking` requires `--reason`. | `--type content\|wording\|typo\|breaking\|restore`, `--reason`, `--report`, `--restore-from` |
+| `csk validate <file\|doc-dir>` | Structural gate (parts exist, no `FILL`, `source_skill_version` stamped, approved backed by `change_log`) | — |
+| `csk rule sync` | Write/update the `<csk-rule>` operating-contract block in `./CLAUDE.md` | — |
+
+Type → gate: `brief→g1-align`, `spec/architecture/design→g2-define`, `backlog/test/bug→g3-build`, `release→g4-ship`.
 
 ### Install & Manage
 
@@ -99,14 +120,14 @@ csk skills search "prd"  # Fuzzy search
 | `csk list` | Show installed skills & agents from manifest | `-g` global |
 | `csk version` | Print binary version | — |
 
-### Deliverables Index
+### Artifact Index (scans gate dirs `g1-* … g5-*`)
 
 | Command | Description | Key flags |
 |---|---|---|
-| `csk db rebuild` | Scan `deliverables/` → regenerate `artifacts.csv` + `refs.csv` | `-v` verbose |
-| `csk db verify` | Validate index integrity | — |
+| `csk db rebuild` | Scan gate dirs (`g1-align … g4-ship`) → regenerate the index | `-v` verbose |
+| `csk db verify` | Validate index integrity (drift, broken-refs) | — |
 | `csk db stats` | Print artifact & ref statistics | — |
-| `csk db list` | List artifacts by phase, status, or project | `--phase P0-P6`, `--status`, `--project`, `--json` |
+| `csk db list` | List artifacts by gate, status, or project | `--phase`, `--status`, `--project`, `--json` |
 
 ### Search & Lookup
 
@@ -116,188 +137,125 @@ csk skills search "prd"  # Fuzzy search
 | `csk refs <id>` | List cross-references for an artifact | `--in` / `--out` / `--all`, `--json` |
 | `csk orphans` | List artifacts with no incoming or outgoing refs | `--exclude-type`, `--include-all`, `--json` |
 | `csk broken-refs` | Validate all refs | `--json` |
-| `csk search "<query>"` | Ripgrep across deliverables | `--type`, `--status`, `--limit`, `--case-sensitive`, `--json` |
+| `csk search "<query>"` | Ripgrep across gate-dir artifacts | `--type`, `--status`, `--limit`, `--case-sensitive`, `--json` |
 
 ### Skills Registry
 
 | Command | Description | Key flags |
 |---|---|---|
-| `csk skills list` | Enumerate installed skills | `--phase P0-P6`, `--owner`, `--json` |
-| `csk skills search "<query>"` | Rank skills by keyword + phase + owner | `--phase`, `--owner`, `--limit`, `--json` |
+| `csk skills list` | Enumerate installed skills (the 14 roster) | `--phase`, `--owner`, `--json` |
+| `csk skills search "<query>"` | Rank skills by keyword + owner | `--phase`, `--owner`, `--limit`, `--json` |
 
-### Visualization
+### Traceability & Visualization
 
 | Command | Description | Key flags |
 |---|---|---|
+| `csk trace <id>` | Upstream + downstream lineage, computed from `derives_from` | `--format markdown\|csv` |
+| `csk trace link` | Record a commit↔story execution link (used by `csk-code`/`csk-bugfix`) | `--story`, `--commit`, `--list` |
+| `csk rtm` | Recompute traceability: `coverage`, `impact`, or `code` (story↔commit links) | `--view coverage\|impact\|code`, `--format markdown\|csv` |
 | `csk viz graph` | Mermaid flowchart of artifact references | `--type` filter, `--out` file |
-| `csk viz rtm` | Mermaid RTM diagram | `--type` filter, `--out` file |
 | `csk viz trace <id>` | Mermaid trace diagram from a single artifact | `--depth` max depth, `--out` file |
-| `csk export` | Export deliverables index as HTML dashboard | `--html`, `--open`, `--out` path |
+| `csk export` | Export the artifact index as an HTML dashboard | `--html`, `--open`, `--out` path |
 
-> **Deprecated aliases:** `csk graph` → `csk viz graph`, `csk rtm trace` → `csk viz trace`
+> **Aliases:** `csk graph` → `csk viz graph`, `csk rtm trace` → `csk viz trace`
 
 ### Watch Mode
 
 | Command | Description | Key flags |
 |---|---|---|
-| `csk watch` | Monitor `deliverables/` for changes, auto-rebuild indexes | `-d` debounce ms, `-q` quiet |
+| `csk watch` | Monitor gate dirs (`g1-* … g5-*`) for changes, auto-rebuild indexes | `-d` debounce ms, `-q` quiet |
 
 ---
 
 ## Workflow Guide
 
-CSK CLI supports the **Inception-Driven Standard Agile** workflow — a 6-phase pipeline optimized for fixed-scope agency projects with teams of 8-10 people.
+CSK runs on **one universal 5-gate spine**. Depth flexes *inside* each document (lo-fi ↔ detailed) — the same gate serves a solo brief and a full enterprise spec. There are no per-phase skill sets to learn.
 
-### Phase Pipeline
+### The 5-Gate Spine
 
 ```
-P0 Discovery → P1 Inception → P2 Definition+Design → P3 Planning → P4 Sprint Loop ◄─┐
-                                                                          ▼              │
-                                                                     P5 Release+UAT      │
-                                                                          ▼              │
-                                                                     P6 Maintenance ─────┘
+G1 ALIGN ──▶ G2 DEFINE ──▶ G3 BUILD&VERIFY ──▶ G4 SHIP ──▶ (G5 OPERATE, deferred)
+ g1-align      g2-define        g3-build           g4-ship
 ```
 
-### Commands by Phase
+### Gates → skills & exit
 
-| Phase | Timebox | Key Commands | Deliverables |
-|---|---|---|---|
-| **P0 — Discovery** | 3-5 days | `csk skills list --phase P0` | Personas, Journey Map, JTBD |
-| **P1 — Inception** | 5 days | `csk skills list --phase P1` | Vision Board, Feature Catalog, Lean Canvas |
-| **P2 — Definition & Design** | 5-7 days | `csk skills list --phase P2` → `csk db rebuild` | PRD, SRS, FSD, OpenAPI, ADR, C4 L2, Wireframe, ERD |
-| **P3 — Planning** | 2-3 days | `csk viz rtm` → `csk db verify` | WBS, Roadmap, Sprint Backlog, RTM seed |
-| **P4 — Sprint Loop** | 2 wk × N | `csk watch` + `csk db rebuild` + `csk orphans` | User Stories, Test Cases, Burndown, RTM updates |
-| **P5 — Release & UAT** | 1-2 wk | `csk broken-refs` + `csk viz trace` | UAT Sign-off, Release Notes, Runbook |
-| **P6 — Maintenance** | Continuous | `csk search` + `csk find` | Incident Reports, Patch Notes |
+| Gate | Folder | Artifact skill(s) | Key commands | Exit |
+|---|---|---|---|---|
+| **G1 ALIGN** | `g1-align/` | `csk-brief` | `csk new --type brief …` → `csk status … approved` | Brief approved |
+| **G2 DEFINE** | `g2-define/` | `csk-spec` · `csk-architecture` · `csk-design` | `csk new --type spec/architecture/design …` → `csk validate` | Spec/arch/design approved |
+| **G3 BUILD&VERIFY** | `g3-build/` | `csk-backlog` · `csk-test` · `csk-bug` + exec `csk-scout/code/debug/bugfix` | `csk watch` + `csk db rebuild` + `csk trace` | DoD met |
+| **G4 SHIP** | `g4-ship/` | `csk-release` | `csk broken-refs` + `csk viz trace` | Release sign-off |
 
 ### Typical Workflow Session
 
 ```bash
-# After creating deliverables in P2:
-csk db rebuild                          # Index all new artifacts
-csk db list --phase P2                  # Verify P2 deliverables exist
-csk broken-refs                         # Catch any missing cross-refs
+# Author + approve an artifact at a gate:
+csk new --type spec --slug checkout --title "Checkout Spec"   # → g2-define/spec-checkout/
+# …fill FILL[...] regions…
+csk validate g2-define/spec-checkout                          # structural gate
+csk status g2-define/spec-checkout approved                   # validate runs inline; CLI stamps
 
-# Visualize the full artifact graph:
+# Keep the index + traceability fresh:
+csk db rebuild && csk db verify
+csk trace SPEC-checkout                  # upstream + downstream lineage
+csk rtm --view coverage                  # traceability as a computed view
+
+# Visualize / catch disconnects:
 csk viz graph --out docs/artifact-graph.mmd
-csk viz rtm --out docs/rtm-diagram.mmd
+csk orphans
+csk broken-refs
 
-# Trace a specific requirement through the pipeline:
-csk viz trace FEAT-001 --depth 3
-
-# During sprints, keep index fresh:
-csk watch                               # Auto-rebuild on every .md save
-
-# Before release, validate everything:
-csk db verify                            # Check for drift
-csk orphans                              # Find disconnected artifacts
+# Edit safely (never overwrite in place):
+csk revise g2-define/spec-checkout --type content --reason "add export FR"
 ```
 
 ---
 
 <a id="document-lineage"></a>
-## Document Lineage (RTM Backbone)
+## Document Lineage (RTM as a computed view)
 
-Every **upstream** document feeds into **downstream** documents via IDs — this is the **RTM (Requirements Traceability Matrix)** in action. Arrows = "derives from".
+Each artifact declares its upstream via `derives_from`; traceability is **computed** from that field — there is no hand-maintained RTM file. `csk trace <id>` walks one artifact's lineage; `csk rtm --view` recomputes coverage/impact across the project. Arrows = "derives from".
 
 ```mermaid
 flowchart LR
-    SH[Stakeholder Vision]
-    BRD[BRD-light<br/>by PM]
-    UR[User Research<br/>by UX]
-    PERS[Personas<br/>by UX]
-    JTBD[JTBD Analysis<br/>by PM/UX]
+    BRIEF[Brief<br/>g1-align]
+    SPEC[Spec<br/>g2-define]
+    ARCH[Architecture<br/>g2-define]
+    DESIGN[Design<br/>g2-define]
+    BACKLOG[Backlog<br/>g3-build]
+    TEST[Test<br/>g3-build]
+    CODE[Code commit<br/>execution]
+    BUG[Bug<br/>g3-build]
+    RELEASE[Release<br/>g4-ship]
 
-    VIS[Vision Board<br/>by PM/PO]
-    FCAT[Feature Catalog YAML<br/>by PO]
-    LCAN[Lean Canvas<br/>by PM]
+    BRIEF --> SPEC
+    SPEC --> ARCH & DESIGN
+    SPEC --> BACKLOG
+    SPEC --> TEST
+    ARCH --> CODE
+    DESIGN --> CODE
+    BACKLOG --> CODE
+    CODE --> TEST
+    TEST --> BUG
+    TEST --> RELEASE
+    CODE --> RELEASE
 
-    PRD[PRD<br/>by PO]
-    SRS[SRS-light<br/>by BA]
-    FSD[FSD-light<br/>by BA]
-    USTORY[User Story + AC<br/>by PO]
-
-    C4[C4 L1-L2<br/>by Architect]
-    ADR[ADR<br/>by Architect]
-    OAPI[OpenAPI Contract<br/>by BE + Architect]
-    ERD[ERD DB Schema<br/>by BE + Architect]
-    WF[Wireframe + Design System<br/>by UX]
-
-    WBS[WBS L1-L4 YAML<br/>by PM/PO]
-    ROADMAP[Roadmap<br/>by PM]
-    SBACK[Sprint Backlog<br/>by Team]
-    RTM[RTM<br/>by BA + QA]
-
-    TSTRAT[Test Strategy<br/>by QA]
-    TPLAN[Test Plan<br/>by QA]
-    TCASE[Test Cases<br/>by QA]
-    BUG[Bug Reports<br/>by QA]
-
-    CODE[Code + Unit Tests<br/>by Dev]
-    PR[Pull Request<br/>by Dev]
-
-    UAT[UAT Plan + Sign-off<br/>by PO + Customer]
-    RELN[Release Notes<br/>by PO]
-    RUNB[Runbook<br/>by DevOps]
-
-    SH --> BRD
-    SH --> UR
-    UR --> PERS & JTBD
-    BRD --> VIS
-    PERS --> VIS
-    JTBD --> VIS
-
-    VIS --> FCAT & LCAN
-    FCAT --> PRD
-    PRD --> SRS --> FSD --> USTORY
-    PRD --> USTORY
-
-    USTORY --> OAPI
-    USTORY --> WF
-    FSD --> ERD
-    OAPI --> ERD
-    C4 --> ADR
-    ADR --> OAPI
-
-    FCAT --> WBS
-    WBS --> ROADMAP --> SBACK
-    USTORY --> SBACK
-    USTORY --> RTM
-
-    USTORY --> TSTRAT --> TPLAN --> TCASE
-    TCASE --> RTM
-    TCASE --> BUG
-
-    USTORY --> CODE --> PR
-    OAPI --> CODE
-    WF --> CODE
-    ERD --> CODE
-
-    PR --> UAT
-    USTORY --> UAT
-    UAT --> RELN
-    RELN --> RUNB
-
-    style RTM fill:#ffeb3b,stroke:#f57f17,stroke-width:3px
-    style USTORY fill:#c8e6c9
-    style PRD fill:#bbdefb
-    style FCAT fill:#bbdefb
-    style OAPI fill:#f8bbd0
+    style SPEC fill:#c8e6c9
+    style TEST fill:#ffeb3b,stroke:#f57f17,stroke-width:3px
+    style BRIEF fill:#bbdefb
 ```
 
-**RTM** (yellow) is the backbone: it links **User Story ↔ Test Case ↔ Code Commit ↔ UAT Result**. Every requirement has a test, every test traces back to a requirement.
+The **commit↔story** link plus `Test ↔ Spec ↔ Bug ↔ Release` lineage is the lightweight RTM backbone: every requirement traces to a test, every test back to a requirement — surfaced on demand via `csk rtm`.
 
-### Phase → Document Mapping
+### Gate → Artifact Mapping
 
-| Phase | Upstream Inputs | Documents Created | Downstream Feeds |
-|-------|----------------|-------------------|-----------------|
-| **P0** | Contract/RFP | Personas, Journey Map, JTBD, User Research Report | P1 Vision |
-| **P1** | P0 outputs | Vision Board, Feature Catalog (YAML), Lean Canvas, C4 L1 | P2 PRD/SRS |
-| **P2** | P1 outputs | PRD, SRS-light, FSD-light, OpenAPI, ADR, C4 L2, Wireframe, ERD, Test Strategy | P3 WBS/RTM |
-| **P3** | P2 outputs | WBS (YAML), Roadmap, Sprint Backlog, RTM seed | P4 Stories |
-| **P4** | P3 outputs | User Stories + AC, Test Cases, Code, PRs, Burndown | P5 UAT |
-| **P5** | P4 outputs | UAT Plan + Sign-off, Release Notes, Runbook | P6 Ops |
-| **P6** | P5 outputs | Incident Reports, Patch Notes, SLA reports | P4 Backlog |
+| Gate | Upstream | Artifact (skill) | Feeds |
+|------|----------|------------------|-------|
+| **G1 ALIGN** | brief from idea/stakeholders | Brief (`csk-brief`) | G2 Spec |
+| **G2 DEFINE** | Brief | Spec (`csk-spec`), Architecture (`csk-architecture`), Design (`csk-design`) | G3 Backlog/Test |
+| **G3 BUILD&VERIFY** | Spec/Arch/Design | Backlog (`csk-backlog`), Test (`csk-test`), Bug (`csk-bug`) + code via execution skills | G4 Release |
+| **G4 SHIP** | Build outputs | Release (`csk-release`) | (G5 Operate, deferred) |
 
 ---
 
@@ -305,91 +263,93 @@ flowchart LR
 
 ### 10 Role-Based Agents
 
-Installed to `.claude/agents/`:
+Installed to `.claude/agents/`. Each persona orchestrates the 14-skill roster (no per-phase coupling):
 
-| Agent | Role | Phase Ownership |
+| Agent | Role | Orchestrates |
 |---|---|---|
-| `csk-po` | Product Owner | P1, P2, P4, P5 |
-| `csk-pm` | Project Manager | P0, P3, P5, P6 |
-| `csk-ba` | Business Analyst | P2, P4 |
-| `csk-ux-ui` | UX/UI Designer | P0, P2 |
-| `csk-architect` | Software Architect | P2 |
-| `csk-tech-lead` | Tech Lead | P2, P4 |
-| `csk-fullstack-dev` | Full-Stack Developer | P4 |
-| `csk-qa` | QA Engineer | P2, P4, P5 |
-| `csk-devops` | DevOps Engineer | P2, P4, P5, P6 |
-| `csk-sm` | Scrum Master | P3, P4 |
+| `csk-po` | Product Owner | csk-brief, csk-spec, csk-backlog, csk-release |
+| `csk-pm` | Project Manager | csk-brief, csk-backlog, csk-spec |
+| `csk-ba` | Business Analyst | csk-brief, csk-spec, csk-backlog, csk-test |
+| `csk-ux-ui` | UX/UI Designer | csk-design, csk-brief, csk-spec |
+| `csk-architect` | Software Architect | csk-architecture, csk-spec |
+| `csk-tech-lead` | Tech Lead | csk-architecture, csk-spec, csk-test |
+| `csk-fullstack-dev` | Full-Stack Developer | csk-code, csk-design, csk-architecture, csk-test, csk-bug |
+| `csk-qa` | QA Engineer | csk-test, csk-bug, csk-release, csk-spec |
+| `csk-devops` | DevOps Engineer | csk-backlog, csk-architecture |
+| `csk-sm` | Scrum Master | csk-backlog, csk-brief, csk-spec |
 
-### 36 Skills
+### 14 Skills (3 archetypes)
 
-Each skill is a `csk-{artifact}/SKILL.md` with template, guidelines, and examples. See [**SKILLS_REFERENCE.md**](./SKILLS_REFERENCE.md) for full details on every skill.
+Each skill is a `csk-{skill}/SKILL.md` with a guideline + checklist + example (no `template.md` — the CLI's `csk new` owns the scaffold). See [**SKILLS_REFERENCE.md**](./SKILLS_REFERENCE.md) for full details.
 
-| Phase | Skills |
+| Archetype | Skills |
 |---|---|
-| **P0** | `csk-stakeholder-interview` · `csk-jtbd` · `csk-persona` · `csk-journey-map` · `csk-user-research` |
-| **P1** | `csk-vision-board` · `csk-lean-canvas` · `csk-feature-catalog` |
-| **P2** | `csk-prd` · `csk-srs` · `csk-fsd` · `csk-c4-l1` · `csk-c4-l2` · `csk-adr` · `csk-openapi` · `csk-erd` · `csk-wireframe` · `csk-wireflow` · `csk-design-system` · `csk-brand` · `csk-test-strategy` · `csk-test-plan` · `csk-test-cases` · `csk-rtm` |
-| **P3** | `csk-wbs` · `csk-roadmap` · `csk-sprint-planning` · `csk-sprint-backlog` · `csk-raci` · `csk-risk-register` |
-| **P4** | `csk-user-story` · `csk-bug-report` · `csk-validate` · `csk-revise` |
-| **P5** | `csk-uat` |
-| **Any** | `csk-conduct` (meta-router) · `csk-orchestrate` |
+| **Artifact (8)** | `csk-brief` (G1) · `csk-spec` · `csk-architecture` · `csk-design` (G2) · `csk-backlog` · `csk-test` · `csk-bug` (G3) · `csk-release` (G4) |
+| **Execution (4)** | `csk-scout` · `csk-code` · `csk-debug` · `csk-bugfix` (drive work; no persisted artifact) |
+| **Utility (2)** | `csk-conduct` (router) · `csk-validate` (pre-flight gate check) |
 
 ```bash
-csk skills list                   # All skills
-csk skills list --phase P2        # P2 Definition & Design only
-csk skills list --owner architect # Architect-owned skills
+csk skills list                   # The 14 skills
+csk skills list --owner architect # Architect-orchestrated skills
 csk skills search "test"          # Fuzzy search by keyword
 ```
 
 ---
 
-## Deliverables Index
+<a id="artifact-index"></a>
+## Artifact Index
 
-CSK CLI manages a structured deliverables directory with CSV-based indexing:
+`csk new` creates a **doc-as-folder** per artifact under a gate dir; `csk` indexes those gate dirs:
 
 ```
-.project/deliverables/
-├── _index/
-│   ├── artifacts.csv       # id, type, version, status, path
-│   └── refs.csv            # source_id, target_id, ref_type, source_file
-├── p0-discovery/
-│   ├── personas-v1.md
-│   └── journey-map-v1.md
-├── p1-inception/
-│   ├── vision-board-v1.md
-│   └── feature-catalog-v1.yaml
-├── p2-definition/
-│   ├── prd-v1.md
-│   ├── srs-light-v1.md
-│   ├── adr-001-postgresql.md
-│   └── ...
-└── ...
+.project/
+├── g1-align/
+│   └── brief-checkout/
+│       ├── brief-checkout.md     # main node (canonical frontmatter, parts: [...])
+│       ├── problem.md            # part stub (parent + part, FILL[...] regions)
+│       └── …
+├── g2-define/                    # spec-* / architecture-* / design-*
+├── g3-build/                     # backlog-* / test-* / bug-* (bug = single flat file)
+├── g4-ship/                      # release-*
+├── _index/                       # CLI-built index (do not hand-edit)
+└── .csk/
+    ├── backup/                   # csk revise snapshots — LOCAL ONLY (gitignore; may hold secrets)
+    └── change-reports/           # csk revise --report output
 ```
 
-Each deliverable Markdown file uses CSK frontmatter:
+> **Gitignore.** Add `.project/.csk/backup/` (or all of `.project/.csk/`) to your `.gitignore` — it holds
+> immutable revise snapshots that may capture secrets. The CLI ships a self-protecting `.csk/.gitignore`
+> as a backstop.
+
+Each main node carries canonical frontmatter — **lifecycle fields are written only by the CLI**:
 
 ```yaml
 ---
-id: PRD-001
-type: prd
-version: "1.0"
-status: approved
-phase: P2
-owners: [po]
-upstream: [VISION-001, FCAT-001]
-implements: [FEAT-001]
-traces_to: [US-001, TC-001]
+id: BRIEF-checkout
+type: brief
+title: "Checkout Brief"
+status: draft                 # draft → review → approved → superseded|archived
+version: 1.0.0                # bumped by `csk revise`
+owners: [csk-po]
+source_skill: csk-brief
+source_skill_version: 1.0.0   # stamped by `csk new`; validate FAILs if absent
+created: 2026-06-04T00:00:00Z
+updated: 2026-06-04T00:00:00Z
+derives_from: [ ]             # upstream → feeds `csk trace` / `csk rtm`
+parts: [problem, users, scope, value]
+change_log:
+  - { version: 1.0.0, date: 2026-06-04, type: initial, reason: initial release }
 ---
 ```
 
-### Index Lifecycle
+### Index lifecycle
 
 ```bash
-csk db rebuild          # Regenerate artifacts.csv + refs.csv
+csk db rebuild          # Scan gate dirs → regenerate the index
 csk watch               # Auto-rebuild on file changes
-csk db verify            # Check stale, broken-refs, bidirectional mismatches
-csk broken-refs          # Standalone broken-refs check
-csk orphans              # Find disconnected artifacts
+csk db verify           # Check drift, broken-refs, bidirectional mismatches
+csk broken-refs         # Standalone broken-refs check
+csk orphans             # Find disconnected artifacts
 ```
 
 ---
